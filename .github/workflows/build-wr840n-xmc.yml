@@ -1,0 +1,78 @@
+name: Build WR840N V6.2 XMC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3 python3-distutils rsync unzip zlib1g-dev file wget perl libelf-dev ecj fastjar java-propose-classpath
+
+      - name: Extract source
+        run: |
+          mkdir -p work
+          unzip -q source/openwrt-19.07-tl-wr840n-v6.x-main.zip -d work
+          ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$ROOT"
+          echo "OPENWRT_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Verify board profile and XMC patch
+        run: |
+          cd "$OPENWRT_ROOT"
+          PATCH="target/linux/generic/pending-4.14/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+          test -f "$PATCH"
+          grep -q '0x204016' "$PATCH"
+          grep -q 'define Device/tl-wr840n-v6.2' target/linux/ramips/image/mt76x8.mk
+          grep -q 'TL-WR840NV6.2' target/linux/ramips/dts/TL-WR840NV6.2.dts || find target/linux/ramips -iname '*WR840N*V6.2*' -print
+
+      - name: Update feeds
+        working-directory: ${{ env.OPENWRT_ROOT }}
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure target
+        working-directory: ${{ env.OPENWRT_ROOT }}
+        run: |
+          cp "$GITHUB_WORKSPACE/config.seed" .config
+          make defconfig
+          grep -q '^CONFIG_TARGET_ramips=y' .config
+          grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config
+          grep -q '^CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' .config
+
+      - name: Prepare kernel and apply patches
+        working-directory: ${{ env.OPENWRT_ROOT }}
+        run: make target/linux/prepare V=s
+
+      - name: Build firmware
+        working-directory: ${{ env.OPENWRT_ROOT }}
+        run: make -j2 V=s
+
+      - name: Collect firmware
+        run: |
+          mkdir -p output
+          IMAGE_DIR="$OPENWRT_ROOT/bin/targets/ramips/mt76x8"
+          find "$IMAGE_DIR" -maxdepth 1 -type f \
+            \( -iname '*wr840n*v6.2*sysupgrade.bin' -o -iname '*wr840n*v6.2*tftp-recovery.bin' -o -iname '*wr840n*v6.2*factory.bin' \) \
+            -exec cp -v {} output/ \;
+          test -n "$(find output -type f -name '*.bin' -print -quit)"
+          ls -lh output
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WR840N-V6.2-XMC-Firmware
+          path: output/*.bin
+          if-no-files-found: error
+          retention-days: 30
