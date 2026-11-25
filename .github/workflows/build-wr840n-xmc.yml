@@ -16,7 +16,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -41,16 +41,14 @@ jobs:
 
           echo "OPENWRT_ROOT=$ROOT" >> "$GITHUB_ENV"
 
-      - name: Install XMC patch
+      - name: Install XMC flash patch
         run: |
-          PATCH_DIR="$OPENWRT_ROOT/target/linux/ramips/patches-4.14"
+          PATCH_DIR="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
 
-          if [ ! -d "$PATCH_DIR" ]; then
-            echo "ERROR: Direktori patch kernel tidak ditemukan"
-            exit 1
-          fi
+          test -d "$PATCH_DIR"
+          test -f patches/479a-mtd-spi-nor-add-xmc-xm25qh32d.patch
 
-          cp patches/303-mtd-spi-nor-add-xmc-xm25qh32d.patch "$PATCH_DIR/"
+          cp patches/479a-mtd-spi-nor-add-xmc-xm25qh32d.patch "$PATCH_DIR/"
 
           cp config.seed "$OPENWRT_ROOT/.config"
 
@@ -65,33 +63,30 @@ jobs:
           cd "$OPENWRT_ROOT"
           make defconfig
 
-          echo "Memeriksa konfigurasi target:"
-          grep -E 'CONFIG_TARGET_ramips=|CONFIG_TARGET_ramips_mt76x8=|WR840N' .config || true
-
           grep -q '^CONFIG_TARGET_ramips=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' .config
+
+          echo "WR840N V6.2 profile selected."
 
       - name: Prepare kernel and apply patches
         run: |
           cd "$OPENWRT_ROOT"
           make target/linux/prepare V=s
 
-      - name: Compile firmware
+      - name: Build firmware
         run: |
           cd "$OPENWRT_ROOT"
           make -j2 V=s
 
-      - name: Collect WR840N firmware
+      - name: Collect firmware
         run: |
           mkdir -p output
 
           IMAGE_DIR="$OPENWRT_ROOT/bin/targets/ramips/mt76x8"
 
           find "$IMAGE_DIR" -maxdepth 1 -type f \
-            \( -iname '*wr840n*v6.2*sysupgrade.bin' \
-            -o -iname '*wr840n*v6.2*tftp-recovery.bin' \
-            -o -iname '*wr840n*v6.2*factory.bin' \) \
+            -iname '*wr840n*v6.2*.bin' \
             -exec cp -v {} output/ \;
 
           if [ -z "$(find output -type f -name '*.bin' -print -quit)" ]; then
@@ -100,10 +95,9 @@ jobs:
             exit 1
           fi
 
-          echo "Firmware berhasil dibuat:"
           ls -lh output/
 
-      - name: Upload firmware BIN
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: WR840N-V6.2-XMC-Firmware
