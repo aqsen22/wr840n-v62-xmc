@@ -1,0 +1,18 @@
+From: Local build preparation
+Subject: [PATCH] mtd: spi-nor: add support for XMC XM25QH32D
+
+Add support for the XMC XM25QH32D 32-Mbit SPI NOR flash (JEDEC ID
+0x204016), with 64 64-KiB sectors and 4-KiB sector erase support.
+
+This patch follows the existing OpenWrt 19.07 patch 478 which adds
+XM25QH64A and XM25QH128A support.
+
+---
+--- a/drivers/mtd/spi-nor/spi-nor.c
++++ b/drivers/mtd/spi-nor/spi-nor.c
+@@ -1205,4 +1205,5 @@
+ 	/* XMC (Wuhan Xinxin Semiconductor Manufacturing Corp.) */
+ 	{ "XM25QH64A", INFO(0x207017, 0, 64 * 1024, 128, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+ 	{ "XM25QH128A", INFO(0x207018, 0, 64 * 1024, 256, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
++	{ "XM25QH32D", INFO(0x204016, 0, 64 * 1024, 64, SECT_4K) },
+ 	{ },
