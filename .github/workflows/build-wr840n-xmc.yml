@@ -39,8 +39,9 @@ jobs:
       - name: Update feeds
         working-directory: ${{ env.OPENWRT_ROOT }}
         run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          chmod +x scripts/feeds
+          bash ./scripts/feeds update -a
+          bash ./scripts/feeds install -a
 
       - name: Configure target
         working-directory: ${{ env.OPENWRT_ROOT }}
