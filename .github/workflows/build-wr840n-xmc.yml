@@ -25,78 +25,76 @@ jobs:
             gettext git libncurses5-dev libssl-dev \
             python3 python3-distutils rsync unzip \
             zlib1g-dev file wget perl libelf-dev \
-            ecj fastjar java-propose-classpath
+            ecj fastjar
 
       - name: Extract OpenWrt source
         run: |
           mkdir -p work
           unzip -q source/openwrt-19.07-tl-wr840n-v6.x-main.zip -d work
 
-          ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -1)"
 
           if [ -z "$ROOT" ]; then
-            echo "ERROR: Source OpenWrt tidak ditemukan"
+            echo "Source tidak ditemukan"
             exit 1
           fi
 
           echo "OPENWRT_ROOT=$ROOT" >> "$GITHUB_ENV"
 
-            - name: Install XMC flash patch
-        run: |
-          PATCH_DIR="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
-
-          test -d "$PATCH_DIR"
-          test -f patches/480-mtd-spi-nor-add-xmc-xm25qh32d.patch
-
-          cp patches/480-mtd-spi-nor-add-xmc-xm25qh32d.patch "$PATCH_DIR/"
-          cp config.seed "$OPENWRT_ROOT/.config"
-
-      - name: Update feeds
+      - name: Verify XMC patch
         run: |
           cd "$OPENWRT_ROOT"
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+
+          find target/linux -name '*xm25qh32d*.patch'
+
+          if ! grep -R -q '0x204016' target/linux; then
+            echo "ERROR: Patch XMC tidak ditemukan"
+            exit 1
+          fi
+
+          echo "XMC JEDEC ID ditemukan"
 
       - name: Configure WR840N V6.2
         run: |
           cd "$OPENWRT_ROOT"
+
+          cp "$GITHUB_WORKSPACE/config.seed" .config
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
           make defconfig
 
           grep -q '^CONFIG_TARGET_ramips=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' .config
 
-          echo "WR840N V6.2 profile selected."
-
-      - name: Prepare kernel and apply patches
+      - name: Prepare kernel
         run: |
           cd "$OPENWRT_ROOT"
           make target/linux/prepare V=s
 
-      - name: Build firmware
+      - name: Compile firmware
         run: |
           cd "$OPENWRT_ROOT"
           make -j2 V=s
 
       - name: Collect firmware
         run: |
-          mkdir -p output
+          mkdir -p "$GITHUB_WORKSPACE/output"
 
           IMAGE_DIR="$OPENWRT_ROOT/bin/targets/ramips/mt76x8"
 
           find "$IMAGE_DIR" -maxdepth 1 -type f \
-            -iname '*wr840n*v6.2*.bin' \
-            -exec cp -v {} output/ \;
+            \( -name '*wr840n*v6.2*sysupgrade.bin' \
+            -o -name '*wr840n*v6.2*tftp-recovery.bin' \) \
+            -exec cp -v {} "$GITHUB_WORKSPACE/output/" \;
 
-          if [ -z "$(find output -type f -name '*.bin' -print -quit)" ]; then
-            echo "ERROR: Firmware WR840N V6.2 tidak ditemukan"
-            ls -lah "$IMAGE_DIR"
-            exit 1
-          fi
+          test -n "$(find "$GITHUB_WORKSPACE/output" -name '*.bin' -print -quit)"
 
-          ls -lh output/
+          ls -lh "$GITHUB_WORKSPACE/output"
 
-      - name: Upload firmware
+      - name: Upload firmware BIN
         uses: actions/upload-artifact@v4
         with:
           name: WR840N-V6.2-XMC-Firmware
