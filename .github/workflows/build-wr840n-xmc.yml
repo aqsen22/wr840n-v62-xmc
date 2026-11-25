@@ -1,0 +1,70 @@
+
+name: Build WR840N V6.2 XMC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison \
+            g++ gawk gcc-multilib g++-multilib gettext git \
+            libncurses5-dev libssl-dev python3 python3-distutils \
+            rsync unzip zlib1g-dev file wget perl libelf-dev
+
+      - name: Extract source
+        run: |
+          mkdir -p work
+          unzip -q openwrt-19.07-tl-wr840n-v6.x-main.zip -d work
+          ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -1)"
+          echo "OPENWRT_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Add XMC patch
+        run: |
+          cp 303-mtd-spi-nor-add-xmc-xm25qh32d.patch \
+            "$OPENWRT_ROOT/target/linux/ramips/patches-4.14/"
+          cp config.seed "$OPENWRT_ROOT/.config"
+
+      - name: Update feeds
+        run: |
+          cd "$OPENWRT_ROOT"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure
+        run: |
+          cd "$OPENWRT_ROOT"
+          make defconfig
+
+      - name: Build
+        run: |
+          cd "$OPENWRT_ROOT"
+          make target/linux/prepare V=s
+          make -j2 V=s
+
+      - name: Collect firmware
+        run: |
+          mkdir -p output
+          find "$OPENWRT_ROOT/bin/targets/ramips/mt76x8" \
+            -type f -name '*.bin' -exec cp {} output/ \;
+          test -n "$(find output -name '*.bin' -print -quit)"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: WR840N-V6.2-XMC-Firmware
+          path: output/*.bin
+          if-no-files-found: error
+          retention-days: 30
