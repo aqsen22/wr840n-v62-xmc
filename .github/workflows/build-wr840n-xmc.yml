@@ -35,13 +35,13 @@ jobs:
           grep -q '0x204016' "$PATCH"
           grep -q 'define Device/tl-wr840n-v6.2' target/linux/ramips/image/mt76x8.mk
           grep -q 'TL-WR840NV6.2' target/linux/ramips/dts/TL-WR840NV6.2.dts || find target/linux/ramips -iname '*WR840N*V6.2*' -print
-
+      
       - name: Update feeds
         working-directory: ${{ env.OPENWRT_ROOT }}
         run: |
           chmod +x scripts/feeds
-          bash ./scripts/feeds update -a
-          bash ./scripts/feeds install -a
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
       - name: Configure target
         working-directory: ${{ env.OPENWRT_ROOT }}
