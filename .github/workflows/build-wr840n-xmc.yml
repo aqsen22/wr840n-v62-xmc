@@ -41,15 +41,14 @@ jobs:
 
           echo "OPENWRT_ROOT=$ROOT" >> "$GITHUB_ENV"
 
-      - name: Install XMC flash patch
+            - name: Install XMC flash patch
         run: |
           PATCH_DIR="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
 
           test -d "$PATCH_DIR"
-          test -f patches/479a-mtd-spi-nor-add-xmc-xm25qh32d.patch
+          test -f patches/480-mtd-spi-nor-add-xmc-xm25qh32d.patch
 
-          cp patches/479a-mtd-spi-nor-add-xmc-xm25qh32d.patch "$PATCH_DIR/"
-
+          cp patches/480-mtd-spi-nor-add-xmc-xm25qh32d.patch "$PATCH_DIR/"
           cp config.seed "$OPENWRT_ROOT/.config"
 
       - name: Update feeds
