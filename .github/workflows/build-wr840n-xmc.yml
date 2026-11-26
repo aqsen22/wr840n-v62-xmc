@@ -82,10 +82,10 @@ jobs:
           DEST="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
           mkdir -p "$DEST"
 
-          cp "$PATCH" "$DEST/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+          cp patches/481-mtd-spi-nor-add-xmc-xm25qh32d.patch \
 
           echo "Patch berhasil disalin:"
-          ls -l "$DEST/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+          ls -l "$DEST/481-mtd-spi-nor-add-xmc-xm25qh32d.patch"
 
       - name: Verify WR840N V6.2 profile
         working-directory: ${{ env.OPENWRT_ROOT }}
