@@ -54,16 +54,38 @@ jobs:
             -name "config.sub" \
           \) -exec chmod u+x {} +
 
+      
       - name: Install XMC patch
+        shell: bash
         run: |
-          PATCH="patches/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
-          DEST="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
+          set -e
 
-          test -f "$PATCH"
+          echo "Memeriksa folder patches..."
+          find "$GITHUB_WORKSPACE/patches" -maxdepth 2 -type f -print
+
+          PATCH="$(find "$GITHUB_WORKSPACE/patches" -maxdepth 2 -type f \
+            -iname '*xmc*xm25qh32d*.patch' | head -n 1)"
+
+          if [ -z "$PATCH" ]; then
+            echo "::error::File patch XMC tidak ditemukan."
+            exit 1
+          fi
+
+          echo "Patch ditemukan: $PATCH"
+
+          if ! grep -qi '204016' "$PATCH"; then
+            echo "::error::JEDEC ID 204016 tidak ditemukan dalam patch."
+            cat "$PATCH"
+            exit 1
+          fi
+
+          DEST="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
           mkdir -p "$DEST"
+
           cp "$PATCH" "$DEST/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
 
-          grep -q '0x204016' "$DEST/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+          echo "Patch berhasil disalin:"
+          ls -l "$DEST/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
 
       - name: Verify WR840N V6.2 profile
         working-directory: ${{ env.OPENWRT_ROOT }}
