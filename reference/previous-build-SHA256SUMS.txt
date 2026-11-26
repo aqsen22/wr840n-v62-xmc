@@ -1,0 +1,2 @@
+38952ed9e0c968154cb50cbb6ae7cc5f58792d5c681832d098543e33fa314368  openwrt-ramips-mt76x8-tl-wr840n-v6.2-squashfs-sysupgrade.bin
+8ebce1b774205accf30fdc204f0502e2103c815194a29f98f4f8db4989e493be  openwrt-ramips-mt76x8-tl-wr840n-v6.2-squashfs-tftp-recovery.bin
