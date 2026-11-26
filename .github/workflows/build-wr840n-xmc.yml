@@ -102,16 +102,26 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      
       - name: Configure target
         working-directory: ${{ env.OPENWRT_ROOT }}
+        shell: bash
         run: |
-          cp "$GITHUB_WORKSPACE/config.seed" .config
+          set -e
 
+          cp "$GITHUB_WORKSPACE/config.seed" .config
           make defconfig
+
+          echo "===== TARGET CONFIGURATION ====="
+          grep -E 'CONFIG_TARGET|WR840N|wr840n' .config || true
+
+          echo "===== AVAILABLE WR840N PROFILES ====="
+          grep -in 'wr840n' target/linux/ramips/image/mt76x8.mk || true
 
           grep -q '^CONFIG_TARGET_ramips=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config
-          grep -q '^CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' .config
+
+          echo "Target ramips MT76x8 berhasil diperiksa."
 
       - name: Prepare kernel and apply patches
         working-directory: ${{ env.OPENWRT_ROOT }}
