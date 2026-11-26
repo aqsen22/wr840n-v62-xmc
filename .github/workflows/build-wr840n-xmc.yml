@@ -1,3 +1,4 @@
+
 name: Build WR840N V6.2 XMC
 
 on:
@@ -10,11 +11,11 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -30,29 +31,52 @@ jobs:
 
           python --version
           python2 --version
-          perl --version
 
-      - name: Extract source
+      - name: Extract OpenWrt source
         run: |
           mkdir -p work
           unzip -q source/openwrt-19.07-tl-wr840n-v6.x-main.zip -d work
+
           ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test -n "$ROOT"
+
           echo "OPENWRT_ROOT=$ROOT" >> "$GITHUB_ENV"
 
-      - name: Verify board profile and XMC patch
-        run: |
-          cd "$OPENWRT_ROOT"
-          PATCH="target/linux/generic/pending-4.14/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
-          test -f "$PATCH"
-          grep -q '0x204016' "$PATCH"
-          grep -q 'define Device/tl-wr840n-v6.2' target/linux/ramips/image/mt76x8.mk
-          grep -q 'TL-WR840NV6.2' target/linux/ramips/dts/TL-WR840NV6.2.dts || find target/linux/ramips -iname '*WR840N*V6.2*' -print
-      
-      - name: Update feeds
+      - name: Restore executable permissions
         working-directory: ${{ env.OPENWRT_ROOT }}
         run: |
           chmod +x scripts/feeds
+
+          find . -type f \( \
+            -name "*.sh" -o \
+            -name "*.pl" -o \
+            -name "config.guess" -o \
+            -name "config.sub" \
+          \) -exec chmod u+x {} +
+
+      - name: Install XMC patch
+        run: |
+          PATCH="patches/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+          DEST="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
+
+          test -f "$PATCH"
+          mkdir -p "$DEST"
+          cp "$PATCH" "$DEST/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+
+          grep -q '0x204016' "$DEST/480-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+
+      - name: Verify WR840N V6.2 profile
+        working-directory: ${{ env.OPENWRT_ROOT }}
+        run: |
+          grep -q 'define Device/tl-wr840n-v6.2' \
+            target/linux/ramips/image/mt76x8.mk
+
+          echo "WR840N V6.2 profile ditemukan"
+          echo "XMC patch ditemukan"
+
+      - name: Update feeds
+        working-directory: ${{ env.OPENWRT_ROOT }}
+        run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
@@ -60,26 +84,37 @@ jobs:
         working-directory: ${{ env.OPENWRT_ROOT }}
         run: |
           cp "$GITHUB_WORKSPACE/config.seed" .config
+
           make defconfig
+
           grep -q '^CONFIG_TARGET_ramips=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' .config
 
       - name: Prepare kernel and apply patches
         working-directory: ${{ env.OPENWRT_ROOT }}
-        run: make target/linux/prepare V=s
+        run: |
+          make target/linux/prepare V=s
 
       - name: Build firmware
         working-directory: ${{ env.OPENWRT_ROOT }}
-        run: make -j2 V=s
+        run: |
+          make -j2 V=s
 
       - name: Collect firmware
         run: |
           mkdir -p output
+
           IMAGE_DIR="$OPENWRT_ROOT/bin/targets/ramips/mt76x8"
+
           find "$IMAGE_DIR" -maxdepth 1 -type f \
-            \( -iname '*wr840n*v6.2*sysupgrade.bin' -o -iname '*wr840n*v6.2*tftp-recovery.bin' -o -iname '*wr840n*v6.2*factory.bin' \) \
+            \( \
+              -iname '*wr840n*v6.2*sysupgrade.bin' -o \
+              -iname '*wr840n*v6.2*tftp-recovery.bin' -o \
+              -iname '*wr840n*v6.2*factory.bin' \
+            \) \
             -exec cp -v {} output/ \;
+
           test -n "$(find output -type f -name '*.bin' -print -quit)"
           ls -lh output
 
