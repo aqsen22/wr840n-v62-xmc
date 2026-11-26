@@ -54,14 +54,15 @@ jobs:
 
           echo "Source OpenWrt: $ROOT"
 
-      - name: Restore executable permissions
+            - name: Restore executable permissions
+        working-directory: ${{ env.OPENWRT_ROOT }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
 
-          cd "$OPENWRT_ROOT"
+          echo "Memulihkan izin eksekusi seluruh skrip OpenWrt..."
 
-          chmod +x scripts/feeds
+          find scripts -type f -exec chmod u+x {} +
 
           find . -type f \( \
             -name "*.sh" -o \
@@ -69,6 +70,13 @@ jobs:
             -name "config.guess" -o \
             -name "config.sub" \
           \) -exec chmod u+x {} +
+
+          chmod u+x scripts/ipkg-build
+          chmod u+x scripts/ipkg-make-index
+          chmod u+x scripts/feeds
+
+          test -x scripts/ipkg-build
+          echo "Izin eksekusi berhasil dipulihkan."
 
       - name: Install XMC patch
         shell: bash
