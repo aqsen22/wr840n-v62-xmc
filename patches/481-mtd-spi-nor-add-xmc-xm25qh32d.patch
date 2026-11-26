@@ -11,8 +11,6 @@ Sector size: 64 KiB
 diff --git a/drivers/mtd/spi-nor/spi-nor.c b/drivers/mtd/spi-nor/spi-nor.c
 --- a/drivers/mtd/spi-nor/spi-nor.c
 +++ b/drivers/mtd/spi-nor/spi-nor.c
-@@ -1205,3 +1205,4 @@ static const struct flash_info spi_nor_ids[] = {
- 	/* XMC (Wuhan Xinxin Semiconductor Manufacturing Corp.) */
- 	{ "XM25QH64A", INFO(0x207017, 0, 64 * 1024, 128, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+@@ -1,1 +1,2 @@
  	{ "XM25QH128A", INFO(0x207018, 0, 64 * 1024, 256, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 +	{ "XM25QH32D", INFO(0x204016, 0, 64 * 1024, 64, SECT_4K) },
