@@ -88,22 +88,51 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      
       - name: Configure target
         shell: bash
         run: |
           set -euo pipefail
           cd "$OPENWRT_ROOT"
 
+          echo "Membuat konfigurasi dasar..."
           cp "$GITHUB_WORKSPACE/config.seed" .config
+          make defconfig
+
+          echo "Mencari simbol perangkat WR840N V6.2..."
+          TARGET_CONFIG="tmp/.config-target.in"
+
+          if [ ! -f "$TARGET_CONFIG" ]; then
+            echo "::error::File konfigurasi target tidak ditemukan."
+            exit 1
+          fi
+
+          echo "===== REFERENSI WR840N ====="
+          grep -in -B 2 -A 3 'wr840n' "$TARGET_CONFIG" || true
+
+          SYMBOL="$(grep -E '^config TARGET_.*wr840n.*v6_2' "$TARGET_CONFIG" \
+            | head -n 1 | awk '{print $2}')"
+
+          if [ -z "$SYMBOL" ]; then
+            echo "::error::Simbol WR840N V6.2 tidak ditemukan."
+            exit 1
+          fi
+
+          echo "Simbol ditemukan: $SYMBOL"
 
           sed -i '/^CONFIG_TARGET_ramips_mt76x8_DEVICE_.*=y/d' .config
-          echo 'CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' >> .config
+          echo "CONFIG_${SYMBOL}=y" >> .config
 
+          echo "Menjalankan konfigurasi ulang..."
           make defconfig
+
+          echo "===== HASIL KONFIGURASI ====="
+          grep -E '^CONFIG_TARGET_(ramips|ramips_mt76x8)' .config
+          grep "^CONFIG_${SYMBOL}=y$" .config
 
           grep -q '^CONFIG_TARGET_ramips=y' .config
           grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config
-          grep -q '^CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' .config
+          grep -q "^CONFIG_${SYMBOL}=y$" .config
 
           echo "Profil WR840N V6.2 berhasil dipilih."
 
