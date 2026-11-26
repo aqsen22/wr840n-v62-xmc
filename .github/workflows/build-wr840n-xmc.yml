@@ -28,7 +28,6 @@ jobs:
             libelf-dev ecj fastjar java-propose-classpath
 
           sudo ln -sf /usr/bin/python2 /usr/local/bin/python
-
           python --version
           python2 --version
 
@@ -38,29 +37,20 @@ jobs:
           set -euo pipefail
 
           mkdir -p work
-
-          unzip -q \
-            source/openwrt-19.07-tl-wr840n-v6.x-main.zip \
-            -d work
+          unzip -q source/openwrt-19.07-tl-wr840n-v6.x-main.zip -d work
 
           ROOT="$(find work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-
-          if [ -z "$ROOT" ]; then
-            echo "::error::Folder source OpenWrt tidak ditemukan."
-            exit 1
-          fi
+          test -n "$ROOT"
 
           echo "OPENWRT_ROOT=$GITHUB_WORKSPACE/$ROOT" >> "$GITHUB_ENV"
 
-          echo "Source OpenWrt: $ROOT"
-
       - name: Restore executable permissions
-        working-directory: ${{ env.OPENWRT_ROOT }}
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/$(find work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 
-          echo "Memulihkan izin eksekusi..."
+          echo "Memulihkan izin skrip..."
 
           find scripts -type f -exec chmod u+x {} +
 
@@ -71,62 +61,21 @@ jobs:
             -name "config.sub" \
           \) -exec chmod u+x {} +
 
-          chmod u+x scripts/ipkg-build
-          chmod u+x scripts/ipkg-make-index
-          chmod u+x scripts/feeds
-
-          test -x scripts/ipkg-build
-
-          echo "Izin eksekusi berhasil dipulihkan."
-
-      - name: Install XMC patch
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "Memeriksa folder patch..."
-
-          find "$GITHUB_WORKSPACE/patches" \
-            -maxdepth 2 -type f -print
-
-          PATCH="$GITHUB_WORKSPACE/patches/481-mtd-spi-nor-add-xmc-xm25qh32d.patch"
-
-          if [ ! -f "$PATCH" ]; then
-            echo "::error::Patch 481 tidak ditemukan."
-            exit 1
+          if [ -f scripts/ipkg-build ]; then
+            chmod u+x scripts/ipkg-build
+            test -x scripts/ipkg-build
           fi
 
-          if ! grep -qi '204016' "$PATCH"; then
-            echo "::error::JEDEC ID XMC tidak ditemukan."
-            exit 1
-          fi
-
-          DEST="$OPENWRT_ROOT/target/linux/generic/pending-4.14"
-
-          mkdir -p "$DEST"
-
-          cp "$PATCH" \
-            "$DEST/481-mtd-spi-nor-add-xmc-xm25qh32d.patch"
-
-          echo "Memeriksa hasil penyalinan..."
-
-          test -f "$DEST/481-mtd-spi-nor-add-xmc-xm25qh32d.patch"
-
-          ls -lh "$DEST/481-mtd-spi-nor-add-xmc-xm25qh32d.patch"
+          echo "Pemulihan izin selesai."
 
       - name: Verify WR840N V6.2 profile
         shell: bash
         run: |
           set -euo pipefail
-
           cd "$OPENWRT_ROOT"
 
-          PROFILE="target/linux/ramips/image/mt76x8.mk"
-
-          if ! grep -q 'define Device/tl-wr840n-v6.2' "$PROFILE"; then
-            echo "::error::Profil WR840N V6.2 tidak ditemukan."
-            exit 1
-          fi
+          grep -q 'define Device/tl-wr840n-v6.2' \
+            target/linux/ramips/image/mt76x8.mk
 
           echo "Profil WR840N V6.2 ditemukan."
 
@@ -134,7 +83,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           cd "$OPENWRT_ROOT"
 
           ./scripts/feeds update -a
@@ -144,52 +92,86 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           cd "$OPENWRT_ROOT"
 
           cp "$GITHUB_WORKSPACE/config.seed" .config
 
+          sed -i '/^CONFIG_TARGET_ramips_mt76x8_DEVICE_.*=y/d' .config
+          echo 'CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' >> .config
+
           make defconfig
 
-          echo "===== TARGET CONFIGURATION ====="
+          grep -q '^CONFIG_TARGET_ramips=y' .config
+          grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config
+          grep -q '^CONFIG_TARGET_ramips_mt76x8_DEVICE_tl-wr840n-v6_2=y' .config
 
-          grep -E '^CONFIG_TARGET' .config || true
+          echo "Profil WR840N V6.2 berhasil dipilih."
 
-          echo "===== WR840N DEVICE SELECTION ====="
-
-          grep -i 'wr840n' .config || true
-
-          if ! grep -q '^CONFIG_TARGET_ramips=y' .config; then
-            echo "::error::Target ramips belum aktif."
-            exit 1
-          fi
-
-          if ! grep -q '^CONFIG_TARGET_ramips_mt76x8=y' .config; then
-            echo "::error::Target MT76x8 belum aktif."
-            exit 1
-          fi
-
-          if ! grep -Eqi '^CONFIG_TARGET_ramips_mt76x8_DEVICE_.*wr840n.*=y' .config; then
-            echo "::error::Profil perangkat WR840N belum dipilih di config.seed."
-            exit 1
-          fi
-
-          echo "Konfigurasi target berhasil diperiksa."
-
-      - name: Prepare kernel and apply patches
+      - name: Prepare kernel
         shell: bash
         run: |
           set -euo pipefail
-
           cd "$OPENWRT_ROOT"
 
           make target/linux/prepare V=s
+
+      - name: Add XMC XM25QH32D support
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$OPENWRT_ROOT"
+
+          SPI_NOR="$(find build_dir -type f \
+            -path '*/drivers/mtd/spi-nor/spi-nor.c' | head -n 1)"
+
+          if [ -z "$SPI_NOR" ]; then
+            echo "::error::File spi-nor.c tidak ditemukan."
+            exit 1
+          fi
+
+          echo "File kernel: $SPI_NOR"
+
+          python3 - "$SPI_NOR" <<'PY'
+          import sys
+
+          path = sys.argv[1]
+
+          with open(path, "r") as f:
+              lines = f.readlines()
+
+          if any("0x204016" in line for line in lines):
+              print("JEDEC ID XMC sudah tersedia.")
+              sys.exit(0)
+
+          for i, line in enumerate(lines):
+              if '"XM25QH128A"' in line:
+                  indent = line[:len(line) - len(line.lstrip())]
+
+                  entry = (
+                      indent +
+                      '{ "XM25QH32D", INFO(0x204016, 0, '
+                      '64 * 1024, 64, SECT_4K) },\n'
+                  )
+
+                  lines.insert(i + 1, entry)
+
+                  with open(path, "w") as f:
+                      f.writelines(lines)
+
+                  print("Dukungan XMC XM25QH32D berhasil ditambahkan.")
+                  break
+          else:
+              print("Entri XM25QH128A tidak ditemukan.")
+              sys.exit(1)
+          PY
+
+          grep -n 'XM25QH32D' "$SPI_NOR"
+          grep -q '0x204016' "$SPI_NOR"
 
       - name: Build firmware
         shell: bash
         run: |
           set -euo pipefail
-
           cd "$OPENWRT_ROOT"
 
           make -j2 V=s
@@ -218,11 +200,9 @@ jobs:
 
           if ! find "$GITHUB_WORKSPACE/output" \
             -type f -name '*.bin' -print -quit | grep -q .; then
-            echo "::error::Tidak ada firmware BIN yang berhasil dikumpulkan."
+            echo "::error::Firmware BIN tidak ditemukan."
             exit 1
           fi
-
-          echo "===== HASIL FIRMWARE ====="
 
           ls -lh "$GITHUB_WORKSPACE/output"
 
