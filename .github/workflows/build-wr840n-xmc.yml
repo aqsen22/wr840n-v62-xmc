@@ -116,6 +116,42 @@ jobs:
           print("\n".join(block))
           PY
 
+      - name: Restore executable permissions for OpenWrt scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$OPENWRT_DIR"
+
+          # Restore executable mode only for recognized script files.
+          find scripts -maxdepth 1 -type f \
+            \( -name '*.sh' -o -name '*.pl' -o -name '*.py' \) \
+            -exec chmod u+x {} +
+
+          # These extensionless files are invoked directly by the build system.
+          for script in \
+            scripts/feeds \
+            scripts/config.guess \
+            scripts/config.sub \
+            scripts/clang-gcc-wrapper; do
+            if [[ -f "$script" ]]; then
+              chmod u+x "$script"
+            fi
+          done
+
+          # Confirm executability of files reported as failing in Actions.
+          for script in \
+            scripts/getver.sh \
+            scripts/get_source_date_epoch.sh \
+            scripts/config.guess \
+            scripts/package-metadata.pl \
+            scripts/feeds; do
+            test -x "$script"
+          done
+
+          if [[ -f scripts/config.sub ]]; then
+            test -x scripts/config.sub
+          fi
+
       - name: Generate device config from source Kconfig metadata
         shell: bash
         run: |
