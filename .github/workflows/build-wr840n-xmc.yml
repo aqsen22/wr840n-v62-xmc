@@ -39,9 +39,16 @@ jobs:
           test -s "$archive"
           mkdir -p build
           unzip -q "$archive" -d build
-          mapfile -t roots < <(find build -mindepth 1 -maxdepth 3 -type f -name Makefile -printf '%h\n')
-          test "${#roots[@]}" -eq 1
-          echo "OPENWRT_DIR=$PWD/${roots[0]}" >> "$GITHUB_ENV"
+          mapfile -t markers < <(find build -type f -path '*/include/toplevel.mk' -print)
+          test "${#markers[@]}" -eq 1
+          root="${markers[0]%/include/toplevel.mk}"
+          test -f "$root/include/toplevel.mk"
+          openwrt_dir="$(realpath "$root")"
+          case "$openwrt_dir" in
+            "$PWD"/build/*) ;;
+            *) echo "OpenWrt root resolves outside extraction directory: $openwrt_dir" >&2; exit 1 ;;
+          esac
+          echo "OPENWRT_DIR=$openwrt_dir" >> "$GITHUB_ENV"
           sha256sum "$archive" | tee build/source-SHA256SUMS.txt
 
       - name: Check target metadata and exact patch order
