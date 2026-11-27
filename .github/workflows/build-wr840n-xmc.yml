@@ -83,8 +83,38 @@ jobs:
           PY
           grep -Fq '{ "XM25QH32D", INFO(0x204016, 0, 64 * 1024, 64, SECT_4K) },' \
             target/linux/generic/pending-4.14/480-mtd-spi-nor-add-xmc-xm25qh32d.patch
-          grep -Fq 'define Device/tl-wr840n-v6.2' target/linux/ramips/image/mt76x8.mk
-          sed -n '/define Device\\/tl-wr840n-v6.2/,/^endef/p' target/linux/ramips/image/mt76x8.mk
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("target/linux/ramips/image/mt76x8.mk")
+          lines = path.read_text().splitlines()
+          marker = "define Device/tl-wr840n-v6.2"
+          starts = [i for i, line in enumerate(lines) if line.strip() == marker]
+          if len(starts) != 1:
+              raise SystemExit(f"Expected exactly one {marker!r}, found {len(starts)}")
+          start = starts[0]
+          ends = [i for i in range(start + 1, len(lines)) if lines[i].strip() == "endef"]
+          if not ends:
+              raise SystemExit(f"Profile at line {start + 1} has no endef")
+          block = lines[start:ends[0] + 1]
+
+          expected = {
+              "TPLINK_FLASHLAYOUT": "4Mmtk",
+              "TPLINK_HWID": "0x08400006",
+              "TPLINK_HWREV": "0x1",
+              "TPLINK_HWREVADD": "0x7",
+              "TPLINK_HVERSION": "3",
+              "IMAGE_SIZE": "3968k",
+          }
+          for key, value in expected.items():
+              pattern = rf"^\s*{re.escape(key)}\s*:=\s*{re.escape(value)}\s*$"
+              if sum(bool(re.match(pattern, line)) for line in block) != 1:
+                  raise SystemExit(f"Profile must define {key} := {value} exactly once")
+
+          print("Validated profile block:")
+          print("\n".join(block))
+          PY
 
       - name: Generate device config from source Kconfig metadata
         shell: bash
